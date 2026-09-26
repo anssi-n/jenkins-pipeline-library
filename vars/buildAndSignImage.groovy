@@ -66,8 +66,6 @@ def call(Map config = [:]) {
                     cosign version
                     echo "Signing image ${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
                     cosign sign --key /tmp/cosign.key \
-                        --new-bundle-format=false \
-                        --use-signing-config=false \
                         "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}" --yes 
                     
                     rm -f /tmp/cosign.key
