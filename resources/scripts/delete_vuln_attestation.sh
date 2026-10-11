@@ -6,11 +6,12 @@ AUTH="${HARBOR_USERNAME}:${HARBOR_PASSWORD}"
 PROJECT="${1}"
 REPO="${2}"
 IMAGE_TAG="${3}"
+CA_CERT="${4}"
 
 echo "Analyzing accessories for ${REPO}:${IMAGE_TAG}..."
 
 # 1. Fetch the artifact metadata to list all associated accessory artifacts
-ARTIFACT_DATA=$(curl -s -u "$AUTH" \
+ARTIFACT_DATA=$(curl -s --cacert ${CA_CERT} -u "$AUTH" \
   "${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${IMAGE_TAG}?with_accessory=true")
 
 # Extract all accessory digests
@@ -25,7 +26,7 @@ fi
 for ACC_DIGEST in $ACCESSORY_DIGESTS; do
 
     # Fetch the accessory's manifest to obtain its underlying blob layers
-    MANIFEST=$(curl -s -u "$AUTH" \
+    MANIFEST=$(curl -s --cacert ${CA_CERT} -u "$AUTH" \
       -H "Accept: application/vnd.oci.image.manifest.v1+json" \
       -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
       "${HARBOR_URL}/v2/${PROJECT}/${REPO}/manifests/${ACC_DIGEST}")
@@ -38,7 +39,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
     fi
 
     # Download the payload layer blob using standard OCI registry routes
-    BLOB_DATA=$(curl -sL -u "$AUTH" \
+    BLOB_DATA=$(curl -sL --cacert ${CA_CERT} -u "$AUTH" \
       "${HARBOR_URL}/v2/${PROJECT}/${REPO}/blobs/${LAYER_DIGEST}")
 
     # Safely extract the inner predicate type if the file format matches an in-toto attestation
@@ -49,7 +50,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
         echo "Found Vulnerability Scan Attestation ($ACC_DIGEST). Proceeding with deletion..."
 
         # Send the API DELETE instruction to Harbor
-        DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "$AUTH" -X DELETE \
+        DELETE_STATUS=$(curl -s --cacert ${CA_CERT} -o /dev/null -w "%{http_code}" -u "$AUTH" -X DELETE \
           "${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${ACC_DIGEST}")
 
         if [ "$DELETE_STATUS" -eq 200 ]; then
