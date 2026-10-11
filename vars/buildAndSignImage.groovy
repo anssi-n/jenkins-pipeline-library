@@ -97,13 +97,13 @@ def call(Map config = [:]) {
                     cosign attest --key /tmp/cosign.key \
                        --type cyclonedx \
                        --predicate "${SBOM_PREDICATE}" \
-                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}" --yes
 
                     echo "Attest vulnerability scan"
                     cosign attest --key /tmp/cosign.key \
                         --type vuln \
                         --predicate "${VULN_PREDICATE}" \
-                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}" --yes
 
                     rm -f /tmp/cosign.key
                 '''
