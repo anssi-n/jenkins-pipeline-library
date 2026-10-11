@@ -44,7 +44,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
 
     # Safely extract the inner predicate type if the file format matches an in-toto attestation
     PREDICATE_TYPE=$(echo "$BLOB_DATA" | jq -r 'try (.dsseEnvelope.payload | @base64d | fromjson | .predicateType) catch "none"')
-
+    echo "ACC_DIGEST=${ACC_DIGEST}, PREDICATE_TYPE=${PREDICATE_TYPE}"
     # 3. Identify and drop the object if it is a vulnerability attestation
     if [ "$PREDICATE_TYPE" == "https://cosign.sigstore.dev/attestation/vuln/v1" ]; then
         echo "Found Vulnerability Scan Attestation ($ACC_DIGEST). Proceeding with deletion..."
