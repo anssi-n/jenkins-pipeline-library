@@ -9,6 +9,8 @@ def call(Map config = [:]) {
     
     def safeImageId    = imageName.replace('/', '-')
     def digestFile     = "/home/jenkins/agent/${safeImageId}-kaniko.digest"
+    def sbomPredicate  = "/home/jenkins/agent/${safeImageId}-sbom-predicate.json"
+    def vulnPredicate  = "/home/jenkins/agent/${safeImageId}-vuln-predicate.json"
 
     container('kaniko') {
         script {
@@ -39,6 +41,27 @@ def call(Map config = [:]) {
         }
     }
 
+    container('trivy') {
+        script {
+
+            withEnv([
+                "REGISTRY=${registry}",
+                "IMAGE_NAME=${imageName}",
+                "DIGEST_FILE=${digestFile}",
+                "SBOM_PREDICATE=${sbomPredicate}",
+                "VULN_PREDICATE=${vulnPredicate}"
+            ]) {
+                sh '''
+                    IMAGE_DIGEST=$(cat ${DIGEST_FILE})
+
+                    echo "Creating SBOM and vulnerability scan"
+                    trivy image --format cyclonedx --output "${SBOM_PREDICATE}" "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+                    trivy image --format cosign-vuln --output "${VULN_PREDICATE}" "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+                '''
+            }
+        }
+    }
+
     withVault(vaultSecrets: [
         [
             path: 'cosign',
@@ -54,7 +77,9 @@ def call(Map config = [:]) {
                 "DOCKER_CONFIG=/docker-config",
                 "REGISTRY=${registry}",
                 "IMAGE_NAME=${imageName}",
-                "DIGEST_FILE=${digestFile}"
+                "DIGEST_FILE=${digestFile}",
+                "SBOM_PREDICATE=${sbomPredicate}",
+                "VULN_PREDICATE=${vulnPredicate}"
             ]) {
                 sh '''
                     IMAGE_DIGEST=$(cat ${DIGEST_FILE})
@@ -67,7 +92,19 @@ def call(Map config = [:]) {
                     echo "Signing image ${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
                     cosign sign --key /tmp/cosign.key \
                         "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}" --yes 
-                    
+
+                    echo "Attest SBOM"
+                    cosign attest --key /tmp/cosign.key \
+                       --type cyclonedx \
+                       --predicate "${SBOM_PREDICATE}" \
+                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+                    echo "Attest vulnerability scan"
+                    cosign attest --key /tmp/cosign.key \
+                        --type vuln \
+                        --predicate "${VULN_PREDICATE}" \
+                       "${REGISTRY}/${IMAGE_NAME}@${IMAGE_DIGEST}"
+
                     rm -f /tmp/cosign.key
                 '''
             }
