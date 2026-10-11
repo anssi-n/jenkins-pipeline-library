@@ -43,7 +43,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
       "${HARBOR_URL}/v2/${PROJECT}/${REPO}/blobs/${LAYER_DIGEST}")
 
     # Safely extract the inner predicate type if the file format matches an in-toto attestation
-    PREDICATE_TYPE=$(echo "$BLOB_DATA" | jq -r 'try (.dsseEnvelope.payload | @base64d | fromjson | .predicateType) catch "none"')
+    PREDICATE_TYPE=$(echo "$BLOB_DATA" | jq -r 'try (.dsseEnvelope.payload) // empty' | base64 -d 2>/dev/null | jq -r 'try (.predicateType) // "none"')
     echo "ACC_DIGEST=${ACC_DIGEST}, PREDICATE_TYPE=${PREDICATE_TYPE}"
     # 3. Identify and drop the object if it is a vulnerability attestation
     if [ "$PREDICATE_TYPE" == "https://cosign.sigstore.dev/attestation/vuln/v1" ]; then
