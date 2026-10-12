@@ -1,18 +1,18 @@
 #!/bin/bash
 set -e
 
-HARBOR_URL="https://harbor.anyman.homelab"
 AUTH="${HARBOR_USERNAME}:${HARBOR_PASSWORD}"
-PROJECT="${1}"
-REPO="${2}"
-IMAGE_TAG="${3}"
-CA_CERT="${4}"
+REGISTRY="https://${1}"
+PROJECT="${2}"
+REPO="${3}"
+IMAGE_TAG="${4}"
+CA_CERT="${5}"
 
 echo "Analyzing accessories for ${REPO}:${IMAGE_TAG}..."
 
 # 1. Fetch the artifact metadata to list all associated accessory artifacts
 ARTIFACT_DATA=$(curl -s --cacert ${CA_CERT} -u "$AUTH" \
-  "${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${IMAGE_TAG}?with_accessory=true")
+  "${REGISTRY}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${IMAGE_TAG}?with_accessory=true")
 
 # Extract all accessory digests
 ACCESSORY_DIGESTS=$(echo "$ARTIFACT_DATA" | jq -r '.accessories[].digest')
@@ -29,7 +29,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
     MANIFEST=$(curl -s --cacert ${CA_CERT} -u "$AUTH" \
       -H "Accept: application/vnd.oci.image.manifest.v1+json" \
       -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-      "${HARBOR_URL}/v2/${PROJECT}/${REPO}/manifests/${ACC_DIGEST}")
+      "${REGISTRY}/v2/${PROJECT}/${REPO}/manifests/${ACC_DIGEST}")
 
     # Extract the digest of the actual data layer
     LAYER_DIGEST=$(echo "$MANIFEST" | jq -r '.layers[0].digest')
@@ -40,7 +40,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
 
     # Download the payload layer blob using standard OCI registry routes
     BLOB_DATA=$(curl -sL --cacert ${CA_CERT} -u "$AUTH" \
-      "${HARBOR_URL}/v2/${PROJECT}/${REPO}/blobs/${LAYER_DIGEST}")
+      "${REGISTRY}/v2/${PROJECT}/${REPO}/blobs/${LAYER_DIGEST}")
 
     # Safely extract the inner predicate type if the file format matches an in-toto attestation
     PREDICATE_TYPE=$(echo "$BLOB_DATA" | jq -r 'try (.dsseEnvelope.payload) // empty' | base64 -d 2>/dev/null | jq -r 'try (.predicateType) // "none"')
@@ -51,7 +51,7 @@ for ACC_DIGEST in $ACCESSORY_DIGESTS; do
 
         # Send the API DELETE instruction to Harbor
         DELETE_STATUS=$(curl -s --cacert ${CA_CERT} -o /dev/null -w "%{http_code}" -u "$AUTH" -X DELETE \
-          "${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${ACC_DIGEST}")
+          "${REGISTRY}/api/v2.0/projects/${PROJECT}/repositories/${REPO}/artifacts/${ACC_DIGEST}")
 
         if [ "$DELETE_STATUS" -eq 200 ]; then
             echo "Successfully deleted vulnerability scan attestation."
